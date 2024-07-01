@@ -1,0 +1,11 @@
+django>=3.2.4,<3.3
+djangorestframework>=3.12.4,<3.13
+djangorestframework-simplejwt
+django-environ
+#reportlab==3.6.11
+django-cors-headers
+psycopg2-binary==2.9.6
+#django-storages==1.13.2
+openpyxl==3.1.2
+xlsxwriter==3.1.2
+# pandas==@
