@@ -24,6 +24,7 @@ urlpatterns = [
 
     path('api/v1/users/', include('bluecampus.app.users.urls')),
     path('api/v1/activity/', include('bluecampus.app.activity.urls')),
+    path('api/v1/feed/', include('bluecampus.app.feed.urls')),
 
 ]
 # urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

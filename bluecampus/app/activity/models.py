@@ -1,6 +1,8 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from bluecampus.app.users.models import Interest
+from django.contrib.contenttypes.fields import GenericForeignKey,GenericRelation
+from django.contrib.contenttypes.models import ContentType
 User = get_user_model()
 
 class Room(models.Model):
@@ -33,16 +35,24 @@ class Participant(models.Model):
         ('listener', 'Listener'),
     ]
 
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=True, blank=True)
+    anonymous_user_id = models.CharField(max_length=255, null=True, blank=True)
     room = models.ForeignKey(Room, on_delete=models.CASCADE)
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='listener')
     joined_at = models.DateTimeField(auto_now_add=True)
 
+    
     class Meta:
         unique_together = ('user', 'room')
-
+    
     def __str__(self):
-        return f'{self.user.username} in {self.room.title}'
+        if self.user:
+            return  f'{self.user.username} in {self.room.title}'
+        else:
+            return f'{self.anonymous_user_id} in {self.room.title}'
+
+    # def __str__(self):
+    #     return f'{self.user.username} in {self.room.title}'
 
 class Message(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
@@ -97,10 +107,23 @@ class Forum(models.Model):
         return self.name
 
 class Activity(models.Model):
+    FOLLOW = 'F'
+    LIKE = 'L'
+    UP_VOTE = 'U'
+    DOWN_VOTE = 'D'
+    ACTIVITY_TYPES = (
+        (FOLLOW, 'Follow'),
+        (LIKE, 'Like'),
+        (UP_VOTE, 'Up Vote'),
+        (DOWN_VOTE, 'Down Vote'),
+    )
+
+    activity_type = models.CharField(max_length=1, choices=ACTIVITY_TYPES,default="L")
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    action = models.CharField(max_length=100)
-    target = models.CharField(max_length=100)
     timestamp = models.DateTimeField(auto_now_add=True)
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE,null=True)
+    object_id = models.PositiveIntegerField(null=True)
+    content_object = GenericForeignKey('content_type', 'object_id')
 
     def __str__(self):
-        return f'{self.user.username} {self.action} {self.target} at {self.timestamp}'
+        return f'{self.user.username} at {self.timestamp}'

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Chat</title>
+</head>
+<body>
+    <h1>Video Chat Room</h1>
+    <div id="video-container">
+        <video id="local-video" autoplay muted></video>
+    </div>
+    <div id="chat-container">
+        <input id="chat-input" type="text" placeholder="Type a message...">
+        <button id="send-button">Send</button>
+        <div id="chat-box"></div>
+    </div>
+    <p>Total Users: <span id="user-count">1</span></p>
+
+    <script>
+        const roomName = "{{ room_id }}";
+        const videoContainer = document.getElementById('video-container');
+        const localVideo = document.getElementById('local-video');
+        const chatInput = document.getElementById('chat-input');
+        const sendButton = document.getElementById('send-button');
+        const chatBox = document.getElementById('chat-box');
+        const userCountElement = document.getElementById('user-count');
+
+        let localStream;
+        let peerConnections = {};
+
+        const ws = new WebSocket(`ws://${window.location.host}/ws/video_chat/${roomName}/`);
+
+        ws.onopen = () => {
+            console.log("WebSocket connection opened");
+            startLocalVideo();
+        };
+
+        ws.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+
+            switch (data.type) {
+                case 'user_joined':
+                    await handleUserJoined(data.user_id);
+                    break;
+                case 'send_offer':
+                    await handleOffer(data.offer, data.from);
+                    break;
+                case 'send_answer':
+                    await handleAnswer(data.answer, data.from);
+                    break;
+                case 'send_ice':
+                    await handleIceCandidate(data.candidate, data.from);
+                    break;
+                case 'chat':
+                    displayChatMessage(data.username, data.message);
+                    break;
+                case 'user_count':
+                    updateUserCount(data.user_count);
+                    break;
+                default:
+                    console.log("Unknown message type:", data.type);
+                    break;
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error("WebSocket error:", error);
+        };
+
+        ws.onclose = () => {
+            console.log("WebSocket connection closed");
+        };
+
+        async function startLocalVideo() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+
+                // Notify other users about the new participant
+                ws.send(JSON.stringify({
+                    type: 'join',
+                    user_id: generateRandomUserId()
+                }));
+            } catch (error) {
+                console.error("Error accessing media devices.", error);
+            }
+        }
+
+        async function handleUserJoined(userId) {
+            if (peerConnections[userId]) {
+                return;
+            }
+            // Ensure localStream is defined before proceeding
+            if (!localStream) {
+                console.error("localStream is not defined");
+                return;
+            }
+
+            // Create a new RTCPeerConnection for the new participant
+            const peerConnection = createPeerConnection(userId);
+            peerConnections[userId] = peerConnection;
+
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            // Create an offer and send it to the new participant
+            try {
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                ws.send(JSON.stringify({
+                    type: 'offer',
+                    offer: offer,
+                    from: userId
+                }));
+            } catch (error) {
+                console.error("Error creating or sending offer:", error);
+            }
+        }
+
+        function createPeerConnection(userId) {
+            const peerConnection = new RTCPeerConnection();
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    ws.send(JSON.stringify({
+                        type: 'ice',
+                        candidate: event.candidate,
+                        from: userId
+                    }));
+                }
+            };
+
+            peerConnection.ontrack = (event) => {
+                const remoteVideo = document.createElement('video');
+                remoteVideo.srcObject = event.streams[0];
+                remoteVideo.autoplay = true;
+                videoContainer.appendChild(remoteVideo);
+            };
+
+            peerConnection.oniceconnectionstatechange = () => {
+                if (peerConnection.iceConnectionState === 'disconnected') {
+                    peerConnection.close();
+                    delete peerConnections[userId];
+                }
+            };
+
+            return peerConnection;
+        }
+
+        async function handleOffer(offer, from) {
+            const peerConnection = createPeerConnection(from);
+            peerConnections[from] = peerConnection;
+
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                ws.send(JSON.stringify({
+                    type: 'answer',
+                    answer: answer,
+                    from: from
+                }));
+            } catch (error) {
+                console.error("Error handling offer:", error);
+            }
+        }
+
+        async function handleAnswer(answer, from) {
+            try {
+                const peerConnection = peerConnections[from];
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+            } catch (error) {
+                console.error("Error handling answer:", error);
+            }
+        }
+
+        async function handleIceCandidate(candidate, from) {
+            try {
+                const peerConnection = peerConnections[from];
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (error) {
+                console.error("Error handling ICE candidate:", error);
+            }
+        }
+
+        sendButton.onclick = () => {
+            const message = chatInput.value;
+            ws.send(JSON.stringify({
+                type: 'chat',
+                message: message
+            }));
+            chatInput.value = '';
+        };
+
+        function displayChatMessage(username, message) {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${username}: ${message}`;
+            chatBox.appendChild(messageElement);
+        }
+
+        function updateUserCount(count) {
+            userCountElement.textContent = count;
+        }
+
+        function generateRandomUserId() {
+            return 'user_' + Math.random().toString(36).substr(2, 9);
+        }
+    </script>
+</body>
+</html>

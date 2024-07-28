@@ -12,7 +12,6 @@ from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.facebook.views import FacebookOAuth2Adapter
 from dj_rest_auth.registration.views import SocialLoginView
 
-
 User = get_user_model()
 
 class GoogleLogin(SocialLoginView):
