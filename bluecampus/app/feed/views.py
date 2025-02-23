@@ -1,81 +1,11 @@
-from django.shortcuts import render
-from django.http import JsonResponse
-from rest_framework.decorators import api_view,permission_classes
-from rest_framework.permissions import IsAuthenticated
-from rest_framework.decorators import action
-from rest_framework.response import Response
-from rest_framework import status, viewsets
+from django.shortcuts import get_object_or_404
 from rest_framework import viewsets, status
-from .models import Comment,Post,Topic,PostAttachment
-from ..activity.models import Activity
-from .serializers import TopicSerializer,PostSerializer,CommentSerializer
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.response import Response
+from rest_framework.decorators import action
+from .models import Comment, Notification, NotificationSettings, Post, Topic, PostAttachment, Visibility
+from .serializers import NotificationSerializer, NotificationSettingsSerializer, TopicSerializer, PostSerializer, CommentSerializer, UpdateNotificationSettingsSerializer, VisibilitySerializer
 from rest_framework.permissions import IsAuthenticated
-from django.contrib.contenttypes.models import ContentType
-from .permissions import IsOwner
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def create_activity(request):#this is to manage the following/unfollowing of topics and also the liking/unliking of posts and comments
-    user = request.user
-    object_id = request.data.get('object_id')
-    object_type = request.data.get('object_type')
-    print("hellow")
-    if object_type =="topic":
-        activity_type=Activity.FOLLOW
-    else:
-        activity_type=Activity.LIKE
-    
-
-    try:
-        content_type = ContentType.objects.get(model=object_type)
-        model_class = content_type.model_class()
-        obj = model_class.objects.get(id=object_id)
-    except ContentType.DoesNotExist:
-        return Response({"error": "Invalid object type"}, status=status.HTTP_400_BAD_REQUEST)
-    except model_class.DoesNotExist:
-        return Response({"error": f"{object_type.capitalize()} not found"}, status=status.HTTP_404_NOT_FOUND)
-
-    if Activity.objects.filter(user=user, content_type=content_type, object_id=obj.id,activity_type=activity_type).exists():
-        
-        Activity.objects.filter(user=user, content_type=content_type, object_id=obj.id,activity_type=activity_type).delete()
-        if activity_type=="L":
-            response="You have unliked this Item"
-        else:
-            response="You have unfollowed this Topic"
-        return Response({"message": response}, status=status.HTTP_200_OK)
-
-    Activity.objects.create(user=user, content_type=content_type, object_id=obj.id,activity_type=activity_type)
-    if activity_type=="L":
-        response="You have liked this Item"
-    else:
-        response="You have followed this Topic"
-    return Response({"message":response}, status=status.HTTP_201_CREATED)
-
-
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def view_feed(request):
-    user = request.user
-    activities=Activity.objects.filter(user=user,activity_type=Activity.FOLLOW)
-    topic_ids=[]
-    for activity in activities:
-        topic_ids.append(activity.object_id)
-    post=Post.objects.filter(topic__id__in=topic_ids)
-    serializer=PostSerializer(post,many=True)
-    return Response(serializer.data)
-
-# @api_view(['GET'])
-# @permission_classes([IsAuthenticated])
-# def get_comments(request, post_id):
-#     try:
-#         post = Post.objects.get(id=post_id)
-#     except Post.DoesNotExist:
-#         return Response({"error": "Post not found"}, status=status.HTTP_404_NOT_FOUND)
-
-#     comments = Comment.objects.filter(post=post)
-#     return Response(CommentSerializer(comments, many=True).data, status=status.HTTP_200_OK)
+from rest_framework import generics, permissions
 
 class TopicViewSet(viewsets.ModelViewSet):
     queryset = Topic.objects.all()
@@ -83,22 +13,92 @@ class TopicViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        serializer.save(host=self.request.user)
+        # serializer.save(host=self.request.user)
+        serializer.save()  # Remove `host=self.request.user`
 
-    @action(detail=False, methods=['get'], url_path='view_topics')
+
+    @action(detail=False, methods=['get'], url_path='view_all_topics')
     def view_all_topics(self, request, pk=None):
-
-        topics=Topic.objects.all()
-        data=TopicSerializer(topics,many=True).data
+        topics = Topic.objects.all()
+        data = TopicSerializer(topics, many=True).data
         return Response(data, status=status.HTTP_200_OK)
+
+class NotificationSettingsView(generics.RetrieveUpdateAPIView):
+    serializer_class = NotificationSettingsSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_object(self):
+        # Ensure that the user gets their own notification settings
+        obj, created = NotificationSettings.objects.get_or_create(user=self.request.user)
+        return obj
+
+    def get_serializer_class(self):
+        if self.request.method == 'PATCH':
+            return UpdateNotificationSettingsSerializer
+        return NotificationSettingsSerializer
+
+
+
+class VisibilityViewSet(viewsets.ModelViewSet):
+    queryset = Visibility.objects.all()
+    serializer_class = VisibilitySerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        # serializer.save(host=self.request.user)
+        serializer.save()  # Remove `host=self.request.user`
+
+
+    @action(detail=False, methods=['get'], url_path='get_visibility')
+    def get(self, request, pk=None):
+        visibility = Visibility.objects.all()
+        data = VisibilitySerializer(visibility, many=True).data
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class NotificationViewSet(viewsets.ModelViewSet):
+    serializer_class = NotificationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Get notifications for the current user only
+        return Notification.objects.filter(user=self.request.user).order_by('-created_at')
+
+    @action(detail=False, methods=['post'], url_path='mark-as-read')
+    def mark_as_read(self, request):
+        # Mark specific notifications as read
+        notification_ids = request.data.get('notification_ids', [])
+        if not notification_ids:
+            return Response({'error': 'No notification IDs provided'}, status=status.HTTP_400_BAD_REQUEST)
+
+        notifications = Notification.objects.filter(user=request.user, id__in=notification_ids)
+        notifications.update(is_read=True)
+        
+        return Response({'message': 'Notifications marked as read'}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['delete'], url_path='clear')
+    def clear_notifications(self, request):
+        # Delete all notifications for the user
+        Notification.objects.filter(user=request.user).delete()
+        return Response({'message': 'Notifications cleared'}, status=status.HTTP_200_OK)
+
 
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
 
+    # def get_serializer_context(self):
+    #     """Ensure that request context is included."""
+    #     context = super().get_serializer_context()
+    #     print(f"Serializer context: {context}")  # Debug: Check context
+    #     return context
+
+    def get_serializer_context(self):
+        # Ensure context includes the request for serialization
+        return {'request': self.request, 'format': self.format_kwarg, 'view': self}
     def perform_create(self, serializer):
-        serializer.save(host=self.request.user)
+        serializer.save(user=self.request.user)
 
     @action(detail=False, methods=['post'], url_path='post_comment')
     def post_comment(self, request, pk=None):
@@ -122,37 +122,82 @@ class CommentViewSet(viewsets.ModelViewSet):
         comment = Comment.objects.create(user=user, post=post, content=content, parent=parent_comment)
         return Response({"message": "Successfully added comment", "comment": CommentSerializer(comment).data}, status=status.HTTP_201_CREATED)
 
-
-    def get_queryset(self):
-        print(self.request.data["is_owner"])
-        if (self.request.data["is_owner"]):
-            return Comment.objects.filter(user=self.request.user)
-        else:
-            print("Inside esle")
-            return Comment.objects.all()
-   
-
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
     serializer_class = PostSerializer
-    permission_classes = [IsAuthenticated,IsOwner]
+    permission_classes = [IsAuthenticated]
+
+    def get_serializer_context(self):
+        """Ensure context includes the request for serialization."""
+        return {'request': self.request, 'format': self.format_kwarg, 'view': self}
 
     def perform_create(self, serializer):
-        post=serializer.save(user=self.request.user)
+        """Create a new post and handle file attachments."""
+        post = serializer.save(user=self.request.user)
         files = self.request.FILES.getlist('files')
         for file in files:
             try:
                 PostAttachment.objects.create(post=post, attachment=file)
             except Exception as e:
-                print(e)
+                print(f"Error while saving attachment: {e}")
 
-    
     def get_queryset(self):
-        print(self.request.data["is_owner"])
-        if (self.request.data["is_owner"]):
+        """Override to filter posts by ownership if specified."""
+        is_owner = self.request.query_params.get('is_owner', None)
+        if is_owner == "true":
             return Post.objects.filter(user=self.request.user)
-        else:
-            print("Inside esle")
-            return Post.objects.all()
+        return Post.objects.all()
 
- 
+    def list(self, request, *args, **kwargs):
+        """List posts with optional filtering."""
+        visibility = request.query_params.get('visibility', None)
+        queryset = self.get_queryset()
+
+        if visibility:
+            queryset = queryset.filter(visibility=visibility)
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        # serializer = self.get_serializer(queryset, many=True)
+        # return Response(serializer.data)
+        # serializer = self.get_serializer(queryset, many=True)
+        # return Response(serializer.data)
+
+    def retrieve(self, request, pk=None):
+        """Retrieve a post by ID including its attachments."""
+        queryset = self.get_queryset()
+        post = get_object_or_404(queryset, pk=pk)
+        serializer = self.get_serializer(post)
+        return Response(serializer.data)
+
+    def update(self, request, *args, **kwargs):
+        """Update an existing post."""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        # Additional handling for attachments update if needed.
+
+        return Response(serializer.data)
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete a post."""
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+# Additional view to get a post's comments count
+class PostCommentCountViewSet(viewsets.GenericViewSet):
+    @action(detail=True, methods=['get'], url_path='comment-count')
+    def get_comment_count(self, request, pk=None):
+        try:
+            post = Post.objects.get(pk=pk)
+        except Post.DoesNotExist:
+            return Response({"error": "Post not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response({"comment_count": post.comment_count}, status=status.HTTP_200_OK)

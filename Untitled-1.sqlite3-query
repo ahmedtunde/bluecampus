@@ -1,0 +1,3 @@
+-- database: /Users/admin/Downloads/campus 3_eri update/campus/blucampus101.sqlite3
+
+DELETE FROM activity_participant;

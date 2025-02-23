@@ -41,13 +41,13 @@
                 case 'user_joined':
                     await handleUserJoined(data.user_id);
                     break;
-                case 'send_offer':
+                case 'offer':
                     await handleOffer(data.offer, data.from);
                     break;
-                case 'send_answer':
+                case 'answer':
                     await handleAnswer(data.answer, data.from);
                     break;
-                case 'send_ice':
+                case 'ice':
                     await handleIceCandidate(data.candidate, data.from);
                     break;
                 case 'chat':
@@ -89,13 +89,11 @@
             if (peerConnections[userId]) {
                 return;
             }
-            // Ensure localStream is defined before proceeding
             if (!localStream) {
                 console.error("localStream is not defined");
                 return;
             }
 
-            // Create a new RTCPeerConnection for the new participant
             const peerConnection = createPeerConnection(userId);
             peerConnections[userId] = peerConnection;
 
@@ -103,7 +101,6 @@
                 peerConnection.addTrack(track, localStream);
             });
 
-            // Create an offer and send it to the new participant
             try {
                 const offer = await peerConnection.createOffer();
                 await peerConnection.setLocalDescription(offer);

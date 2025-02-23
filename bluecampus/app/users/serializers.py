@@ -20,8 +20,8 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'password', 'first_name', 'last_name',
-            'bio', 'interests', 'interest_ids', 'otp_verified'
+            'id', 'username', 'email', 'password', 'first_name', 'last_name','recovery_email',
+            'bio', 'interests', 'interest_ids', 'otp_verified','profile_picture'
         ]
         extra_kwargs = {'password': {'write_only': True}}
 
@@ -46,3 +46,44 @@ class UserSerializer(serializers.ModelSerializer):
             instance.interests.set(interests_data)
         instance.save()
         return instance
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    interests = InterestSerializer(many=True, read_only=True)
+    interest_ids = serializers.PrimaryKeyRelatedField(
+        many=True, write_only=True, queryset=Interest.objects.all(), source='interests'
+    )
+    profile_picture = serializers.SerializerMethodField()  
+
+
+    class Meta:
+        model = User
+        fields = [
+            'username', 'email', 'first_name', 'last_name', 'profile_picture',
+            'bio', 'interests', 'interest_ids'
+        ]
+        depth = 2
+    
+    def update(self, instance, validated_data):
+        profile_data = validated_data.pop('profile', {})
+        instance = super().update(instance, validated_data)
+        
+        # If the user has a related profile model, update the bio
+        if profile_data:
+            profile = instance.profile
+            profile.bio = profile_data.get('bio', profile.bio)
+            profile.save()
+
+        return instance        
+    
+    def get_profile_picture(self, obj):
+        request = self.context.get('request')
+        base_url = 'https://tuns111.pythonanywhere.com'
+        
+        if obj.profile_picture:
+            # If request context is available, use it to build the full URL
+            if request:
+                return request.build_absolute_uri(obj.profile_picture.url)
+            # If request context is not available, prepend the base URL
+            else:
+                return f"{base_url}{obj.profile_picture.url}"
+        return None

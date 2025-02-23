@@ -21,7 +21,7 @@ class DebugMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.get_host() == 'demo.edves.net':
+        if request.get_host() == 'demo.bluecampus.ng':
             settings.DEBUG = True
         else:
             settings.DEBUG = False

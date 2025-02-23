@@ -32,12 +32,13 @@ SECRET_KEY = secrets.token_hex(16)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1:5173','127.0.0.1:5173', '127.0.0.1','https://ahmed0111.pythonanywhere.com', 'https://accounting.edves.net', 'http://accounting.edves.net','176.34.208.195', 'https://176.34.208.195','http://edves.cloud','https://edves.cloud', 'edves.cloud', 'https://34.242.59.16', 'http://34.242.59.16', '34.242.59.16', '3.250.9.202', 'http://54.194.202.58/','54.194.202.58' , 'http://localhost', 'localhost']
-CORS_ALLOWED_ORIGINS = ['http://127.0.0.1:5173','https://127.0.0.1:5173', 'http://127.0.0.1','https://ahmed0111.pythonanywhere.com', 'https://accounting.edves.net', 'http://accounting.edves.net', 'http://176.34.208.195', 'https://176.34.208.195','http://edves.cloud','https://edves.cloud', 'https://edves.net','https://34.242.59.16', 'http://34.242.59.16', 'http://3.250.9.202' ]
+ALLOWED_HOSTS = ['https://192.168.1.159:8000','localhost:3000','https://localhost:3000','https://127.0.0.1:3000','https://192.168.1.159', 'https://192.168.1.159:3000','127.0.0.1:3000', '127.0.0.1','https://ahmed0111.pythonanywhere.com', 'https://accounting.edves.net', 'http://accounting.edves.net','176.34.208.195', 'https://176.34.208.195','http://edves.cloud','https://edves.cloud', 'edves.cloud', 'https://34.242.59.16', 'http://34.242.59.16', '34.242.59.16', '3.250.9.202', 'http://54.194.202.58/','54.194.202.58' , 'https://localhost', 'localhost']
+CORS_ALLOWED_ORIGINS = ['https://192.168.1.159:3000','https://192.168.1.159:8000','https://localhost:3000','http://127.0.0.1:3000','https://127.0.0.1:3000', 'http://127.0.0.1','https://ahmed0111.pythonanywhere.com', 'https://accounting.edves.net', 'http://accounting.edves.net', 'http://176.34.208.195', 'https://176.34.208.195','http://edves.cloud','https://edves.cloud', 'https://edves.net','https://34.242.59.16', 'http://34.242.59.16', 'http://3.250.9.202' ]
 
-CSRF_TRUSTED_ORIGINS = []
-CORS_ORIGIN_WHITELIST = ['127.0.0.1:5173','127.0.0.1:5173', '127.0.0.1','ahmed0111.pythonanywhere.com', 'https://accounting.edves.net', 'accounting.edves.net', 'http://176.34.208.195', 'https://176.34.208.195','http://edves.cloud','https://edves.cloud', 'edves.net', 'https://edves.net', 'http://34.242.59.16','https://34.242.59.16', 'http://3.250.9.202','https://3.250.9.202'  ]
+CSRF_TRUSTED_ORIGINS = ['https://192.168.1.159:8000']
+CORS_ORIGIN_WHITELIST = ['https://192.168.1.159:8000','https://localhost:3000','localhost:3000','https://127.0.0.1:3000','https://192.168.1.159:3000','127.0.0.1:3000', '127.0.0.1','ahmed0111.pythonanywhere.com', 'https://accounting.edves.net', 'accounting.edves.net', 'http://176.34.208.195', 'https://176.34.208.195','http://edves.cloud','https://edves.cloud', 'edves.net', 'https://edves.net', 'http://34.242.59.16','https://34.242.59.16', 'http://3.250.9.202','https://3.250.9.202'  ]
 # Application definition
+CORS_ALLOW_ALL_ORIGINS = True
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -61,6 +62,7 @@ INSTALLED_APPS = [
     'storages',
     'channels',
     'config',
+    'sslserver',
     'bluecampus.app.users',
     'bluecampus.app.activity',
     'bluecampus.app.feed',
@@ -169,12 +171,18 @@ ASGI_APPLICATION = 'config.asgi.application'
 # }
 
 # settings.py
+# SECURE_SSL_REDIRECT = True
+# CSRF_COOKIE_SECURE = True
+# SESSION_COOKIE_SECURE = True
+
 
 CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
             "hosts": [('127.0.0.1', 6379)],
+            "capacity": 1000,  # Increase the default capacity from 100 to 1000 or more as needed
+
         },
     },
 }
@@ -188,7 +196,8 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'upload')
 # MEDIA_URL = 'https://%s.s3.amazonaws.com/' % AWS_STORAGE_BUCKET_NAME
 # MEDIA_URL = '/media/'
 
-
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
 
@@ -207,10 +216,14 @@ AUTHENTICATION_BACKENDS = [
     'social_core.backends.facebook.FacebookOAuth2',
 
 ]
+
+# settings.py
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
+        'rest_framework_simplejwt.authentication.JWTAuthentication'),
+        'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.AllowAny',],
 }
 
 SOCIALACCOUNT_PROVIDERS = {
@@ -310,9 +323,10 @@ EMAIL_HOST = 'smtp.sendgrid.net'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'apikey'  # This is the string literal "apikey", not the SendGrid username
-EMAIL_HOST_PASSWORD = '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'  # Your SendGrid API key
+EMAIL_HOST_PASSWORD = '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'  # Your SendGrid API key
+# EMAIL_HOST_PASSWORD = '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'  # Your SendGrid API key
 DEFAULT_FROM_EMAIL = 'test@bluecampus.com'
-
+# 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
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
