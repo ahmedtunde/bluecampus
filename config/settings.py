@@ -316,17 +316,6 @@ LOGGING = {
 
 
 
-# settings.py (for local testing)
-# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.sendgrid.net'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'apikey'  # This is the string literal "apikey", not the SendGrid username
-EMAIL_HOST_PASSWORD = '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'  # Your SendGrid API key
-# EMAIL_HOST_PASSWORD = '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'  # Your SendGrid API key
-DEFAULT_FROM_EMAIL = 'test@bluecampus.com'
-# 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
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
